@@ -264,12 +264,22 @@ const enemies: {
   dead: boolean;
   material: THREE.MeshStandardMaterial;
   hitFlash: number;
+  deathTime: number;
+  deathParticlesSpawned: boolean;
+  fallDirection: number;
 }[] = [];
 
 const hitParticles: {
   mesh: THREE.Mesh;
   velocity: THREE.Vector3;
   life: number;
+}[] = [];
+
+const deathParticles: {
+  mesh: THREE.Mesh;
+  velocity: THREE.Vector3;
+  life: number;
+  maxLife: number;
 }[] = [];
 let hp=100, xp=0, kills=0, wave=1, attackCooldown=0, dodgeTime=0, invulnerable=0;
 const keys = new Set<string>();
@@ -350,7 +360,11 @@ function spawnEnemy(x:number,z:number,boss=false){
   enemies.push({
     group: g, hp: boss ? 12 : 3, maxHp: boss ? 12 : 3,
     attack: boss ? 18 : 7, cool: 1, dead: false,
-    material, hitFlash: 0
+    material,
+    hitFlash: 0,
+    deathTime: 0,
+    deathParticlesSpawned: false,
+    fallDirection: Math.random() < .5 ? -1 : 1
   });
 }
 function spawnWave(){
@@ -387,6 +401,41 @@ function spawnHitParticles(position: THREE.Vector3) {
   }
 }
 
+function spawnDeathEffect(position: THREE.Vector3) {
+  for (let i = 0; i < 28; i++) {
+    const material = new THREE.MeshBasicMaterial({
+      color: i % 3 === 0 ? 0xd8b4fe : 0x6d28d9,
+      transparent: true,
+      opacity: .95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+
+    const mesh = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(.055 + Math.random() * .095, 0),
+      material
+    );
+
+    mesh.position.copy(position);
+    mesh.position.y += Math.random() * .85;
+    scene.add(mesh);
+
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.5 + Math.random() * 3;
+
+    deathParticles.push({
+      mesh,
+      velocity: new THREE.Vector3(
+        Math.cos(angle) * speed,
+        .8 + Math.random() * 2.5,
+        Math.sin(angle) * speed
+      ),
+      life: .75,
+      maxLife: .75
+    });
+  }
+}
+
 function attack(){
   if(attackCooldown>0||hp<=0)return;
   attackCooldown=.42;
@@ -404,7 +453,11 @@ function attack(){
       e.group.position.x+=Math.sign(dx||1)*.45;
       hit=true;
       if(e.hp<=0){
-        e.dead=true;scene.remove(e.group);kills++;xp+=e.maxHp===12?60:25;
+        e.dead=true;
+        e.deathTime=0;
+        e.deathParticlesSpawned=false;
+        kills++;
+        xp+=e.maxHp===12?60:25;
       }
     }
   }
@@ -533,9 +586,66 @@ function animate(){
     }
   }
   for (const e of enemies) {
+    if (e.dead) {
+      e.deathTime += dt;
+
+      // Stage 1: smoothly fall sideways onto the ground.
+      const fallProgress = Math.min(1, e.deathTime / .45);
+      const fallEase =
+        fallProgress * fallProgress * (3 - 2 * fallProgress);
+
+      e.group.rotation.z =
+        e.fallDirection * fallEase * (Math.PI / 2);
+
+      e.group.position.y =
+        (e.maxHp === 12 ? .8 : .4) * fallEase;
+
+      // Stage 2: release fragments after the body has landed.
+      if (fallProgress >= 1 && !e.deathParticlesSpawned) {
+        e.deathParticlesSpawned = true;
+        spawnDeathEffect(e.group.position);
+      }
+
+      if (e.deathParticlesSpawned) {
+        const dissolveProgress = Math.min(
+          1,
+          (e.deathTime - .45) / .55
+        );
+
+        e.group.scale.setScalar(
+          Math.max(.001, 1 - dissolveProgress)
+        );
+
+        if (dissolveProgress >= 1) {
+          scene.remove(e.group);
+        }
+      }
+
+      continue;
+    }
+
     if (e.hitFlash > 0) {
       e.hitFlash = Math.max(0, e.hitFlash - dt);
       if (e.hitFlash === 0) e.material.emissiveIntensity = .8;
+    }
+  }
+
+  for (let i = deathParticles.length - 1; i >= 0; i--) {
+    const particle = deathParticles[i];
+    particle.life -= dt;
+    particle.mesh.position.addScaledVector(particle.velocity, dt);
+    particle.velocity.y -= 2.5 * dt;
+    particle.velocity.multiplyScalar(Math.max(0, 1 - dt * 1.5));
+
+    const material = particle.mesh.material as THREE.MeshBasicMaterial;
+    material.opacity = Math.max(0, particle.life / particle.maxLife);
+    particle.mesh.scale.setScalar(Math.max(.05, particle.life / particle.maxLife));
+
+    if (particle.life <= 0) {
+      scene.remove(particle.mesh);
+      particle.mesh.geometry.dispose();
+      material.dispose();
+      deathParticles.splice(i, 1);
     }
   }
 
