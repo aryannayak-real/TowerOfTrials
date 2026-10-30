@@ -563,27 +563,73 @@ function animate(){
       player.position.x=THREE.MathUtils.clamp(player.position.x,-13,13);
       player.position.z=THREE.MathUtils.clamp(player.position.z,-16,5);
     }
-    for(const e of enemies){
-      if(e.dead)continue;
-      const dx=player.position.x-e.group.position.x;
-      const dz=player.position.z-e.group.position.z;
-      const dist=Math.hypot(dx,dz);
-      if(dist>1.35){
-        e.group.position.x+=(dx/(dist||1))*dt*(e.maxHp===12?1.2:1.7);
-        e.group.position.z+=(dz/(dist||1))*dt*(e.maxHp===12?1.2:1.7);
-        e.group.rotation.y=Math.atan2(dx,dz);
-      }else{
-        e.cool-=dt;
-        if(e.cool<=0){
-          e.cool=e.maxHp===12?1.25:1.05;
-          if(invulnerable<=0){
-            hp=Math.max(0,hp-e.attack);
-            say(hp===0?'YOU HAVE FALLEN':'YOU TOOK DAMAGE');
+    const activeEnemies = enemies.filter(e => !e.dead);
+
+    activeEnemies.forEach((e, index) => {
+      const isBoss = e.maxHp === 12;
+
+      // Give each enemy its own position around the player.
+      const angle =
+        -Math.PI / 2 + (index / activeEnemies.length) * Math.PI * 2;
+
+      const desiredRadius = isBoss ? 1.4 : 1.8;
+
+      const targetX =
+        player.position.x + Math.cos(angle) * desiredRadius;
+      const targetZ =
+        player.position.z + Math.sin(angle) * desiredRadius;
+
+      let moveX = targetX - e.group.position.x;
+      let moveZ = targetZ - e.group.position.z;
+
+      // Push enemies apart so they do not overlap.
+      for (const other of activeEnemies) {
+        if (other === e) continue;
+
+        const awayX = e.group.position.x - other.group.position.x;
+        const awayZ = e.group.position.z - other.group.position.z;
+        const separation = Math.hypot(awayX, awayZ);
+
+        if (separation > 0 && separation < 1.15) {
+          const push = (1.15 - separation) / 1.15;
+          moveX += (awayX / separation) * push * 1.8;
+          moveZ += (awayZ / separation) * push * 1.8;
+        }
+      }
+
+      // Move toward the assigned surrounding position.
+      const moveLength = Math.hypot(moveX, moveZ);
+
+      if (moveLength > .18) {
+        const speed = isBoss ? 1.55 : 1.9;
+        e.group.position.x += (moveX / moveLength) * speed * dt;
+        e.group.position.z += (moveZ / moveLength) * speed * dt;
+      }
+
+      // Always face the player.
+      const dx = player.position.x - e.group.position.x;
+      const dz = player.position.z - e.group.position.z;
+      const playerDistance = Math.hypot(dx, dz);
+
+      e.group.rotation.y = Math.atan2(dx, dz);
+
+      // Attack when close enough.
+      const attackRange = isBoss ? 1.85 : 2.05;
+
+      if (playerDistance < attackRange) {
+        e.cool -= dt;
+
+        if (e.cool <= 0) {
+          e.cool = isBoss ? 1.1 : 1.35;
+
+          if (invulnerable <= 0) {
+            hp = Math.max(0, hp - e.attack);
+            say(hp === 0 ? 'YOU HAVE FALLEN' : 'YOU TOOK DAMAGE');
             updateHud();
           }
         }
       }
-    }
+    });
   }
   for (const e of enemies) {
     if (e.dead) {
