@@ -1,0 +1,71 @@
+*{box-sizing:border-box}
+html,body,#app{margin:0;width:100%;height:100%;overflow:hidden}
+body{background:#090d18;color:#f4f7ff;font-family:system-ui,sans-serif;touch-action:none}
+canvas{display:block}
+.hud{position:fixed;inset:0;pointer-events:none;padding:18px;display:flex;flex-direction:column;justify-content:space-between}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.panel{background:#0a1020dc;border:1px solid #42516b88;border-radius:12px;padding:12px 15px;backdrop-filter:blur(8px)}
+.brand{font-size:11px;letter-spacing:3px;color:#5eead4;font-weight:800}
+h1{font-size:21px;margin:3px 0 8px}
+.small{font-size:12px;color:#aab8d0}
+.bar{width:150px;height:7px;background:#273247;border-radius:9px;overflow:hidden;margin-top:7px}
+.fill{height:100%;width:100%;background:#2dd4bf;transition:width .2s}
+.enemybar{background:#fb7185}
+.status{text-align:right;font-size:12px;color:#d5e1f5}
+.bottom{display:flex;justify-content:space-between;align-items:end;gap:12px}
+.action{pointer-events:auto;border:1px solid #5eead477;background:#0d2630e8;color:#d8fffa;border-radius:14px;padding:15px 20px;font-weight:800;font-size:14px;touch-action:manipulation}
+.action:active{transform:scale(.96);background:#145e65}
+.controls{display:flex;gap:8px;pointer-events:auto}
+.hint{max-width:220px;font-size:12px;color:#c4d0e3;line-height:1.5}
+#message{position:fixed;top:36%;left:50%;transform:translate(-50%,-50%);text-align:center;font-size:22px;font-weight:800;color:#fff;text-shadow:0 2px 18px #000;pointer-events:none;opacity:0;transition:opacity .25s}
+@media(max-width:600px){.hud{padding:11px}.panel{padding:9px 10px}h1{font-size:17px}.bar{width:115px}.action{padding:14px 15px}.hint{max-width:130px;font-size:10px}.small,.status{font-size:10px}}
+
+
+/* Mobile movement joystick */
+#joystick {
+  position: fixed;
+  z-index: 5;
+  left: 24px;
+  bottom: 34px;
+  width: 124px;
+  height: 124px;
+  border: 2px solid #8ba6c477;
+  border-radius: 50%;
+  background: #101d30bb;
+  box-shadow: inset 0 0 24px #02061788, 0 4px 18px #0005;
+  pointer-events: auto;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#joy-knob {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid #99f6e4;
+  background: radial-gradient(circle at 35% 30%, #5eead4, #0f766e);
+  box-shadow: 0 0 18px #2dd4bf66;
+  pointer-events: none;
+}
+.joy-label {
+  position: absolute;
+  bottom: 8px;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #c5d5e9;
+  font-weight: 800;
+  pointer-events: none;
+}
+@media(max-width:600px) {
+  #joystick {
+    left: 15px;
+    bottom: 24px;
+    width: 116px;
+    height: 116px;
+  }
+  .bottom { padding-left: 124px; }
+  .hint { display: none; }
+  .controls { margin-left: auto; }
+}
