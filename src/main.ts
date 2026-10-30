@@ -255,7 +255,22 @@ const pommel = new THREE.Mesh(
 pommel.position.y = -.36;
 sword.add(pommel);
 
-const enemies: {group:THREE.Group;hp:number;maxHp:number;attack:number;cool:number;dead:boolean}[]=[];
+const enemies: {
+  group: THREE.Group;
+  hp: number;
+  maxHp: number;
+  attack: number;
+  cool: number;
+  dead: boolean;
+  material: THREE.MeshStandardMaterial;
+  hitFlash: number;
+}[] = [];
+
+const hitParticles: {
+  mesh: THREE.Mesh;
+  velocity: THREE.Vector3;
+  life: number;
+}[] = [];
 let hp=100, xp=0, kills=0, wave=1, attackCooldown=0, dodgeTime=0, invulnerable=0;
 const keys = new Set<string>();
 let joystickX = 0;
@@ -332,7 +347,11 @@ function spawnEnemy(x:number,z:number,boss=false){
   h.position.y=boss?2.2:1.55;g.add(h);
   const eyeLight=new THREE.PointLight('#fb7185',boss?3:1.3,4);
   eyeLight.position.y=1.6;g.add(eyeLight);
-  enemies.push({group:g,hp:boss?12:3,maxHp:boss?12:3,attack:boss?18:7,cool:1,dead:false});
+  enemies.push({
+    group: g, hp: boss ? 12 : 3, maxHp: boss ? 12 : 3,
+    attack: boss ? 18 : 7, cool: 1, dead: false,
+    material, hitFlash: 0
+  });
 }
 function spawnWave(){
   if(wave===1){for(let i=0;i<4;i++)spawnEnemy((i-1.5)*3,-6-Math.random()*5)}
@@ -344,11 +363,34 @@ function spawnWave(){
 }
 spawnWave();
 
+let attackAnimTime = 0;
+
+function spawnHitParticles(position: THREE.Vector3) {
+  for (let i = 0; i < 5; i++) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(.065, 6, 6),
+      new THREE.MeshBasicMaterial({ color: '#5eead4', transparent: true })
+    );
+    mesh.position.copy(position);
+    mesh.position.y += 1.2 + Math.random() * .5;
+    scene.add(mesh);
+
+    hitParticles.push({
+      mesh,
+      velocity: new THREE.Vector3(
+        (Math.random() - .5) * 4,
+        Math.random() * 3,
+        (Math.random() - .5) * 4
+      ),
+      life: .38
+    });
+  }
+}
+
 function attack(){
   if(attackCooldown>0||hp<=0)return;
   attackCooldown=.42;
-  sword.rotation.z=-1.8;
-  setTimeout(()=>{sword.rotation.z=-.35},130);
+  attackAnimTime = .32;
   let hit=false;
   for(const e of enemies){
     if(e.dead)continue;
@@ -356,6 +398,9 @@ function attack(){
     const dz=e.group.position.z-player.position.z;
     if(Math.hypot(dx,dz)<2.7){
       e.hp-=1;
+      e.hitFlash = .18;
+      e.material.emissiveIntensity = 2.8;
+      spawnHitParticles(e.group.position);
       e.group.position.x+=Math.sign(dx||1)*.45;
       hit=true;
       if(e.hp<=0){
@@ -424,6 +469,15 @@ function animate(){
   requestAnimationFrame(animate);
   const dt=Math.min(clock.getDelta(),.04);
   attackCooldown=Math.max(0,attackCooldown-dt);
+  attackAnimTime=Math.max(0,attackAnimTime-dt);
+
+  if (attackAnimTime > 0) {
+    const progress = 1 - attackAnimTime / .32;
+    sword.rotation.z = -.35 - Math.sin(progress * Math.PI) * 1.55;
+  } else {
+    sword.rotation.z = -.35;
+  }
+
   dodgeTime=Math.max(0,dodgeTime-dt);
   invulnerable=Math.max(0,invulnerable-dt);
   if(messageTimer>0){messageTimer-=dt;if(messageTimer<=0)message.style.opacity='0'}
@@ -478,6 +532,30 @@ function animate(){
       }
     }
   }
+  for (const e of enemies) {
+    if (e.hitFlash > 0) {
+      e.hitFlash = Math.max(0, e.hitFlash - dt);
+      if (e.hitFlash === 0) e.material.emissiveIntensity = .8;
+    }
+  }
+
+  for (let i = hitParticles.length - 1; i >= 0; i--) {
+    const particle = hitParticles[i];
+    particle.life -= dt;
+    particle.mesh.position.addScaledVector(particle.velocity, dt);
+    particle.velocity.y -= 7 * dt;
+
+    const material = particle.mesh.material as THREE.MeshBasicMaterial;
+    material.opacity = Math.max(0, particle.life / .38);
+
+    if (particle.life <= 0) {
+      scene.remove(particle.mesh);
+      particle.mesh.geometry.dispose();
+      material.dispose();
+      hitParticles.splice(i, 1);
+    }
+  }
+
   targetCamera.set(
     player.position.x + Math.sin(cameraYaw) * cameraDistance,
     player.position.y + cameraHeight,
